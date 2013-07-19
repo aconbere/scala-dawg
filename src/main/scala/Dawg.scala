@@ -28,7 +28,7 @@ extends ClassicBot with Logging {
       var response = ""
       var error = ""
 
-      val proc = Seq(executable.getPath, from, to, msg).run(new ProcessIO(
+      val proc = Seq(executable.getPath, List(from, to, to, msg).mkString(" ")).run(new ProcessIO(
         { stdin:OutputStream => stdin.close() },
         { stdout:InputStream =>
           response = Source.fromInputStream(stdout).mkString
@@ -41,10 +41,8 @@ extends ClassicBot with Logging {
       ))
 
       if (proc.exitValue == 0) {
-        println("okay: " + response)
         Some(response)
       } else {
-        println("error: " + response)
         None
       }
   }
