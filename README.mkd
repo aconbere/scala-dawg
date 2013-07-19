@@ -1,0 +1,39 @@
+# Dawg
+
+Dawg is a irc bot that can be used to shell out. It should roughly mirrot the feature set of IRCCat, but support unicode.
+
+## Building
+
+Dawg uses sbt to build, to build an executable jar run
+
+```shell
+sbt assembly
+```
+
+## Running
+
+Dawg consumes a config file (shown at the bottom of the readme). You'll need to set yours up and then run the following command against it.
+
+```shell
+java -jar ./target/dawg-assembly-0.0.1.jar <conf>
+```
+
+## Config
+
+```
+irc {
+ server="irc.example.com"
+ port=6667
+ rooms=[
+  "#channel"
+ ]
+}
+
+bot {
+  nickname="dawg"
+  username="dawg"
+  password="pass"
+  realname="dawg"
+  command="./src/main/resources/handle_message.sh"
+}
+```
