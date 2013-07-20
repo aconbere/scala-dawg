@@ -18,17 +18,23 @@ class Dawg ( val serverName:String
            , val executable:File
            )
 extends ClassicBot with Logging {
-
   import Tokens._
   import Messages._
 
-  def runCommand(from:String, to:String, msg:String):Option[String] = {
+  object Patterns {
+    val _toNick = "^(" + nickName + ")[ :]+"
+    val toMe = (_toNick + "(.*)").r
+    val join = (_toNick + "join (.*)").r
+    val part = (_toNick + "part").r
+  }
 
+  def runCommand(from:String, to:String, msg:String):Option[String] = {
       // response is filled in when we finish reading stdout
       var response = ""
       var error = ""
 
-      val proc = Seq(executable.getPath, List(from, to, to, msg).mkString(" ")).run(new ProcessIO(
+      val cmd = List(from, to, to, msg).mkString(" ")
+      val proc = Seq(executable.getPath, cmd).run(new ProcessIO(
         { stdin:OutputStream => stdin.close() },
         { stdout:InputStream =>
           response = Source.fromInputStream(stdout).mkString
@@ -47,18 +53,27 @@ extends ClassicBot with Logging {
       }
   }
 
-  val toMePattern = ("^(" + nickName + "[:| ](.*))").r
 
   val respondTo = defaultResponse.orElse[Message,Option[Response]] {
     case PrivMsg(from, `nickName`, msg) =>
       runCommand(from, nickName, msg).map(PrivMsg(from, _))
-    case PrivMsg(from, to, toMePattern(leader, content)) =>
+    case PrivMsg(from, to, Patterns.join(_leader, channel)) =>
+      Some(Join(List(Room(channel, None))))
+    case PrivMsg(from, to, Patterns.part(_leader)) =>
+      Some(Part(List(to)))
+    case PrivMsg(from, to, Patterns.toMe(_leader, content)) =>
+      println(_leader, content)
       runCommand(from, to, content).map(PrivMsg(to, _))
   }
 }
 
 object Main {
   def main(args:Array[String]) {
+    if (args.length < 1) {
+      println("No Command file given")
+      System.exit(1)
+    }
+
     val file = args(0)
 
     val conf = ConfigFactory.parseFile(new File(file))
@@ -86,13 +101,13 @@ object Main {
 
     if (!executable.exists()) {
       println("Command file " + command + " does not exist")
-      System.exit(1);
+      System.exit(2);
     } else if (!executable.isFile()) {
       println("Command file " + command + " is not a file")
-      System.exit(2);
+      System.exit(3);
     } else if (!executable.canExecute()) {
       println("Command file " + command + " can not be executed")
-      System.exit(3);
+      System.exit(4);
     }
 
     val bot = new Dawg( server
