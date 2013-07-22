@@ -63,9 +63,9 @@ extends ClassicBot with Logging {
     case PrivMsg(from, `nickName`, msg) =>
       new Thread(new Worker(sender, executable, from, nickName, msg, from)).start
     case PrivMsg(from, to, Patterns.join(_leader, channel)) =>
-      Some(Join(List(Room(channel, None))))
+      sender ! Join(List(Room(channel, None)))
     case PrivMsg(from, to, Patterns.part(_leader)) =>
-      Some(Part(List(to)))
+      sender ! Part(List(to))
     case PrivMsg(from, to, Patterns.toMe(_nick, msg)) =>
       new Thread(new Worker(sender, executable, from, nickName, msg, to)).start
   }
