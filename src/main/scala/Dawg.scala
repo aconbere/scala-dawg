@@ -9,6 +9,37 @@ import java.io.{ File, InputStream, OutputStream }
 import scala.io.Source
 import scala.collection.JavaConversions._
 
+class Worker (
+  actor:ActorRef,
+  executable:File,
+  from:String,
+  to:String,
+  msg:String,
+  sendTo:String
+) extends Runnable {
+  import Messages._
+  def run() {
+    // response is filled in when we finish reading stdout
+    var response = ""
+    var error = ""
+
+    val cmd = List(from, to, to, "login", msg).mkString(" ")
+
+    val proc = Seq(executable.getPath, cmd).run(new ProcessIO(
+      { stdin:OutputStream => stdin.close() },
+      { stdout:InputStream =>
+        response = Source.fromInputStream(stdout).mkString
+        stdout.close()
+      },
+      { stderr:InputStream => stderr.close() }
+    ))
+
+    if (proc.exitValue == 0) {
+      actor ! PrivMsg(sendTo, response)
+    }
+  }
+}
+
 class Dawg ( val serverName:String
            , val nickName:String
            , val userName:String
@@ -28,41 +59,15 @@ extends ClassicBot with Logging {
     val part = (_toNick + "part").r
   }
 
-  def runCommand(from:String, to:String, msg:String):Option[String] = {
-      // response is filled in when we finish reading stdout
-      var response = ""
-      var error = ""
-
-      val cmd = List(from, to, to, "login", msg).mkString(" ")
-      val proc = Seq(executable.getPath, cmd).run(new ProcessIO(
-        { stdin:OutputStream => stdin.close() },
-        { stdout:InputStream =>
-          response = Source.fromInputStream(stdout).mkString
-          stdout.close()
-        },
-        { stderr:InputStream =>
-          error = Source.fromInputStream(stderr).mkString
-          stderr.close()
-        }
-      ))
-
-      if (proc.exitValue == 0) {
-        Some(response)
-      } else {
-        None
-      }
-  }
-
-
-  val respondTo = defaultResponse.orElse[Message,Option[Response]] {
+  def receive = onConnect orElse defaultHandler orElse {
     case PrivMsg(from, `nickName`, msg) =>
-      runCommand(from, nickName, msg).map(PrivMsg(from, _))
+      new Thread(new Worker(sender, executable, from, nickName, msg, from)).start
     case PrivMsg(from, to, Patterns.join(_leader, channel)) =>
       Some(Join(List(Room(channel, None))))
     case PrivMsg(from, to, Patterns.part(_leader)) =>
       Some(Part(List(to)))
-    case PrivMsg(from, to, Patterns.toMe(_nick, content)) =>
-      runCommand(from, to, content).map(PrivMsg(to, _))
+    case PrivMsg(from, to, Patterns.toMe(_nick, msg)) =>
+      new Thread(new Worker(sender, executable, from, nickName, msg, to)).start
   }
 }
 
@@ -109,15 +114,14 @@ object Main {
       System.exit(4);
     }
 
-    val bot = new Dawg( server
-                      , nickName
-                      , userName
-                      , password
-                      , realName
-                      , rooms
-                      , new File(command)
-                      )
+    val system = ActorSystem("dawg")
 
-    val actor = Client.start(server, port, bot)
+    val bot = system.actorOf(
+      Props(classOf[Dawg], server, nickName, userName, password, realName, rooms, executable)
+    )
+
+    val client = system.actorOf(
+      Props(classOf[Client], server, port, bot)
+    )
   }
 }

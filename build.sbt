@@ -17,8 +17,9 @@ fork in run := true
 
 libraryDependencies ++= Seq(
   "org.scalatest" % "scalatest_2.10" % "1.9.1" % "test",
+  "com.typesafe.akka" %% "akka-actor" % "2.2.0",
   "junit" % "junit" % "4.10" % "test",
-  "org.conbere" %% "irc" % "0.2.0",
+  // "org.conbere" %% "irc" % "0.4.0",
   "org.apache.logging.log4j" % "log4j-core" % "2.0-beta3",
   "com.typesafe" %% "scalalogging-log4j" % "1.0.1"
 )
