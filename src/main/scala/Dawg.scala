@@ -33,7 +33,7 @@ extends ClassicBot with Logging {
       var response = ""
       var error = ""
 
-      val cmd = List(from, to, to, msg).mkString(" ")
+      val cmd = List(from, to, to, "login", msg).mkString(" ")
       val proc = Seq(executable.getPath, cmd).run(new ProcessIO(
         { stdin:OutputStream => stdin.close() },
         { stdout:InputStream =>
@@ -61,8 +61,7 @@ extends ClassicBot with Logging {
       Some(Join(List(Room(channel, None))))
     case PrivMsg(from, to, Patterns.part(_leader)) =>
       Some(Part(List(to)))
-    case PrivMsg(from, to, Patterns.toMe(_leader, content)) =>
-      println(_leader, content)
+    case PrivMsg(from, to, Patterns.toMe(_nick, content)) =>
       runCommand(from, to, content).map(PrivMsg(to, _))
   }
 }
