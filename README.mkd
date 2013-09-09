@@ -1,6 +1,6 @@
 # Dawg
 
-Dawg is a irc bot that can be used to shell out. It should roughly mirrot the feature set of IRCCat, but support unicode.
+Dawg is a irc bot that can be used to shell out. It should roughly mirrot the feature set of IRCCat but commands are non-blocking, allowing for long running processes.
 
 ## Building
 

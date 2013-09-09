@@ -1,38 +1,36 @@
-package com.conbere.speakandspell
+package com.conbere.dawg
 
-import com.typesafe.scalalogging.log4j.Logging
 import scala.sys.process._
-import org.conbere.irc._
-import akka.actor._
-import com.typesafe.config._
+import org.conbere.irc.{ Messages, Tokens, ClassicBot, Room, Client }
+import akka.actor.{ ActorRef, ActorSystem, Props }
+import com.typesafe.config.{ Config, ConfigFactory }
 import java.io.{ File, InputStream, OutputStream }
 import scala.io.Source
 import scala.collection.JavaConversions._
 
+// a thread to run the command in
 class Worker (
-  actor:ActorRef,
-  executable:File,
-  from:String,
-  to:String,
-  msg:String,
-  sendTo:String
+  val actor:ActorRef,
+  val executable:File,
+  val from:String,
+  val to:String,
+  val msg:String,
+  val sendTo:String
 ) extends Runnable {
   import Messages._
+
   def run() {
     // response is filled in when we finish reading stdout
     var response = ""
-    var error = ""
 
     val cmd = List(from, to, to, "login", msg).mkString(" ")
 
-    val proc = Seq(executable.getPath, cmd).run(new ProcessIO(
-      { stdin:OutputStream => stdin.close() },
-      { stdout:InputStream =>
-        response = Source.fromInputStream(stdout).mkString
-        stdout.close()
-      },
-      { stderr:InputStream => stderr.close() }
-    ))
+    val proc = Seq(executable.getPath, cmd).run(
+      new ProcessIO(_.close(), {
+        stdout:InputStream =>
+          response = Source.fromInputStream(stdout).mkString
+          stdout.close()
+      }, _.close()))
 
     if (proc.exitValue == 0) {
       actor ! PrivMsg(sendTo, response)
@@ -40,23 +38,24 @@ class Worker (
   }
 }
 
-class Dawg ( val serverName:String
-           , val nickName:String
-           , val userName:String
-           , val password:String
-           , val realName:String
-           , val rooms:List[Room]
-           , val executable:File
-           )
-extends ClassicBot with Logging {
+// Bot definition
+class Dawg (
+  val serverName:String,
+  val nickName:String,
+  val userName:String,
+  val password:String,
+  val realName:String,
+  val rooms:List[Room],
+  val executable:File
+) extends ClassicBot {
   import Tokens._
   import Messages._
 
   object Patterns {
-    val _toNick = "^(" + nickName + ")[ :]+"
-    val toMe = (_toNick + "(.*)").r
-    val join = (_toNick + "join (.*)").r
-    val part = (_toNick + "part").r
+    val toNick = "^(" + nickName + ")[ :]+"
+    val toMe = (toNick + "(.*)").r
+    val join = (toNick + "join (.*)").r
+    val part = (toNick + "part").r
   }
 
   def receive = onConnect orElse defaultHandler orElse {
@@ -71,17 +70,22 @@ extends ClassicBot with Logging {
   }
 }
 
-object Main {
-  def main(args:Array[String]) {
-    if (args.length < 1) {
-      println("No Command file given")
-      System.exit(1)
-    }
+// A container for the typed config properties
+class DawgConfig (
+  val server:String,
+  val port:Int,
+  val rooms: List[Room],
+  val nickName: String,
+  val realName: String,
+  val userName: String,
+  val password: String,
+  val command:String,
+  val executable: File
+)
 
-    val file = args(0)
-
-    val conf = ConfigFactory.parseFile(new File(file))
-
+object DawgConfig {
+  // process the typesafe.Conf into a simpler DawgConfig
+  def fromConf(conf:Config) = {
     val server = conf.getString("irc.server")
     val port = conf.getInt("irc.port")
     val rooms = conf.getStringList("irc.rooms").toList.flatMap {
@@ -114,14 +118,37 @@ object Main {
       System.exit(4);
     }
 
+    new DawgConfig(server, port, rooms, nickName, realName, userName, password, command, executable)
+  }
+}
+
+object Main {
+  def main(args:Array[String]) {
+    if (args.length < 1) {
+      println("No Command file given")
+      System.exit(1)
+    }
+
+    val conf = DawgConfig.fromConf(ConfigFactory.parseFile(new File(args(0))))
+
     val system = ActorSystem("dawg")
 
     val bot = system.actorOf(
-      Props(classOf[Dawg], server, nickName, userName, password, realName, rooms, executable)
+      Props(classOf[Dawg],
+        conf.server,
+        conf.nickName,
+        conf.userName,
+        conf.password,
+        conf.realName,
+        conf.rooms,
+        conf.executable)
     )
 
     val client = system.actorOf(
-      Props(classOf[Client], server, port, bot)
+      Props(classOf[Client],
+        conf.server,
+        conf.port,
+        bot)
     )
   }
 }
